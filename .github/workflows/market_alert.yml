@@ -1,0 +1,28 @@
+name: Market Alert Monitor
+
+on:
+  schedule:
+    - cron: "0 14,16,18,20 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  market-alert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Market Alert Script
+        env:
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          ALERT_APP_PASSWORD: ${{ secrets.ALERT_APP_PASSWORD }}
+        run: python market_alert.py
