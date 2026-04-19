@@ -107,8 +107,8 @@ def is_market_open():
     """Returns True if current time is before 4:00 PM ET (20:00 UTC)."""
     now_utc = datetime.now(timezone.utc)
     # Market hours: Mon-Fri, before 20:00 UTC (4 PM ET)
-    if now_utc.weekday() > 4:  # Saturday=5, Sunday=6
-        return False
+    #if now_utc.weekday() > 4:  # Saturday=5, Sunday=6
+        #return False
     return now_utc.hour < 20
 
 
