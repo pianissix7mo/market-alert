@@ -2,7 +2,7 @@ name: Market Alert Monitor
 
 on:
   schedule:
-    - cron: "0 14,16,18,20 * * 1-5"
+    - cron: "* * * * *"
   workflow_dispatch:
 
 jobs:
