@@ -16,7 +16,7 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT   = 587
 
 # Thresholds
-VIX_LOW  = 15
+VIX_LOW  = 18
 VIX_HIGH = 30
 FG_LOW   = 30
 FG_HIGH  = 70
