@@ -2,12 +2,15 @@ name: Market Alert Monitor
 
 on:
   schedule:
-    - cron: "* * * * *"
+    # Trigger twice a day as backup (9:30 AM ET & 1 PM ET)
+    - cron: "30 13 * * 1-5"
+    - cron: "0 17 * * 1-5"
   workflow_dispatch:
 
 jobs:
   market-alert:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     steps:
       - name: Checkout repository
