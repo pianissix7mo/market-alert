@@ -2,15 +2,19 @@ name: Market Alert Monitor
 
 on:
   schedule:
-    # Trigger twice a day as backup (9:30 AM ET & 1 PM ET)
+    # Runs on weekdays during US market hours
+    # These UTC times correspond roughly to:
+    # 9:30 AM ET, 11:30 AM ET, 1:30 PM ET, 3:30 PM ET during daylight saving time
     - cron: "30 13 * * 1-5"
-    - cron: "0 17 * * 1-5"
+    - cron: "30 15 * * 1-5"
+    - cron: "30 17 * * 1-5"
+    - cron: "30 19 * * 1-5"
   workflow_dispatch:
 
 jobs:
   market-alert:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
