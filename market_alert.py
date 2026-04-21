@@ -1,31 +1,37 @@
 #!/usr/bin/env python3
 import os
 import smtplib
-import time
 import yfinance as yf
 import fear_and_greed
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timezone
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
 
 # ─── CONFIGURATION ────────────────────────────────────────────────
-RECIPIENT_EMAIL     = "mofeiwang@hotmail.com"
-SENDER_EMAIL        = os.environ.get("ALERT_EMAIL")
+RECIPIENT_EMAIL = "mofeiwang@hotmail.com"
+SENDER_EMAIL = os.environ.get("ALERT_EMAIL")
 SENDER_APP_PASSWORD = os.environ.get("ALERT_APP_PASSWORD")
 
 SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT   = 587
+SMTP_PORT = 587
 
 # Thresholds
-VIX_LOW  = 16
+VIX_LOW = 16
 VIX_HIGH = 30
-FG_LOW   = 30
-FG_HIGH  = 70
+FG_LOW = 30
+FG_HIGH = 70
 QQQ_HIGH = 700
-
-# How often to check (in seconds)
-CHECK_INTERVAL_SECONDS = 7200  # 7200 = every 2 hours
 # ──────────────────────────────────────────────────────────────────
+
+
+def validate_env():
+    if not SENDER_EMAIL:
+        raise ValueError("Missing environment variable: ALERT_EMAIL")
+    if not SENDER_APP_PASSWORD:
+        raise ValueError("Missing environment variable: ALERT_APP_PASSWORD")
 
 
 def get_vix():
@@ -33,12 +39,12 @@ def get_vix():
     data = vix.history(period="1d")
     if data.empty:
         raise ValueError("Could not fetch VIX data.")
-    return round(data["Close"].iloc[-1], 2)
+    return round(float(data["Close"].iloc[-1]), 2)
 
 
 def get_fear_and_greed():
     fg = fear_and_greed.get()
-    return round(fg.value, 2), fg.description
+    return round(float(fg.value), 2), fg.description
 
 
 def get_qqq_price():
@@ -46,32 +52,40 @@ def get_qqq_price():
     data = qqq.history(period="1d")
     if data.empty:
         raise ValueError("Could not fetch QQQ data.")
-    return round(data["Close"].iloc[-1], 2)
+    return round(float(data["Close"].iloc[-1]), 2)
 
 
 def check_conditions(vix_value, fg_value, qqq_price):
     alerts = []
+
     if vix_value < VIX_LOW:
         alerts.append(f"🟢 VIX is BELOW {VIX_LOW}: currently {vix_value}")
     if vix_value > VIX_HIGH:
         alerts.append(f"🔴 VIX is ABOVE {VIX_HIGH}: currently {vix_value}")
+
     if fg_value < FG_LOW:
-        alerts.append(f"🔴 CNN Fear & Greed Index is BELOW {FG_LOW} (Extreme Fear): currently {fg_value}")
+        alerts.append(
+            f"🔴 CNN Fear & Greed Index is BELOW {FG_LOW} (Extreme Fear): currently {fg_value}"
+        )
     if fg_value > FG_HIGH:
-        alerts.append(f"🟢 CNN Fear & Greed Index is ABOVE {FG_HIGH} (Extreme Greed): currently {fg_value}")
+        alerts.append(
+            f"🟢 CNN Fear & Greed Index is ABOVE {FG_HIGH} (Extreme Greed): currently {fg_value}"
+        )
+
     if qqq_price > QQQ_HIGH:
         alerts.append(f"🚀 QQQ is ABOVE ${QQQ_HIGH}: currently ${qqq_price}")
+
     return alerts
 
 
 def send_email(alerts, vix_value, fg_value, fg_desc, qqq_price):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    subject = f"⚠️ Market Alert Triggered — {now}"
+    now_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M:%S %p ET")
+    subject = f"⚠️ Market Alert Triggered — {now_et}"
 
     body = f"""
     <html>
     <body>
-    <h2>⚠️ Market Alert — {now}</h2>
+    <h2>⚠️ Market Alert — {now_et}</h2>
     <h3>Triggered Conditions:</h3>
     <ul>
         {"".join(f"<li><b>{a}</b></li>" for a in alerts)}
@@ -103,71 +117,72 @@ def send_email(alerts, vix_value, fg_value, fg_desc, qqq_price):
     print(f"✅ Alert email sent to {RECIPIENT_EMAIL}")
 
 
-def is_market_open():
-    """Returns True if current time is before 4:00 PM ET (20:00 UTC)."""
-    now_utc = datetime.now(timezone.utc)
-    # Market hours: Mon-Fri, before 20:00 UTC (4 PM ET)
-    if now_utc.weekday() > 4:  # Saturday=5, Sunday=6
+def is_weekday_market_hours():
+    """
+    Returns True only during regular US market hours:
+    Monday-Friday, 9:30 AM to 4:00 PM America/New_York
+    """
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+
+    if now_et.weekday() > 4:
         return False
-    return now_utc.hour < 20
+
+    current_time = now_et.time()
+    market_open = time(9, 30)
+    market_close = time(16, 0)
+
+    return market_open <= current_time < market_close
 
 
 def run_check():
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n{'='*50}")
-    print(f"  Market Alert Check — {now}")
-    print(f"{'='*50}")
+    now_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M:%S %p ET")
+    print(f"\n{'=' * 50}")
+    print(f"  Market Alert Check — {now_et}")
+    print(f"{'=' * 50}")
 
-    try:
-        print("\n📡 Fetching VIX...")
-        vix_value = get_vix()
-        print(f"   VIX = {vix_value}")
+    validate_env()
 
-        print("📡 Fetching CNN Fear & Greed Index...")
-        fg_value, fg_desc = get_fear_and_greed()
-        print(f"   Fear & Greed = {fg_value} ({fg_desc})")
+    print("\n📡 Fetching VIX...")
+    vix_value = get_vix()
+    print(f"   VIX = {vix_value}")
 
-        print("📡 Fetching QQQ price...")
-        qqq_price = get_qqq_price()
-        print(f"   QQQ = ${qqq_price}")
+    print("📡 Fetching CNN Fear & Greed Index...")
+    fg_value, fg_desc = get_fear_and_greed()
+    print(f"   Fear & Greed = {fg_value} ({fg_desc})")
 
-        alerts = check_conditions(vix_value, fg_value, qqq_price)
+    print("📡 Fetching QQQ price...")
+    qqq_price = get_qqq_price()
+    print(f"   QQQ = ${qqq_price}")
 
-        if alerts:
-            print(f"\n🚨 {len(alerts)} alert(s) triggered!")
-            for a in alerts:
-                print(f"   → {a}")
-            send_email(alerts, vix_value, fg_value, fg_desc, qqq_price)
-        else:
-            print("\n✅ All values within normal range. No alert sent.")
-            print(f"   VIX: {VIX_LOW} ≤ {vix_value} ≤ {VIX_HIGH}")
-            print(f"   F&G: {FG_LOW} ≤ {fg_value} ≤ {FG_HIGH}")
-            print(f"   QQQ: {qqq_price} ≤ {QQQ_HIGH}")
+    alerts = check_conditions(vix_value, fg_value, qqq_price)
 
-    except Exception as e:
-        print(f"\n❌ Error during check: {e}")
-        print("   Will retry at next interval...")
+    if alerts:
+        print(f"\n🚨 {len(alerts)} alert(s) triggered!")
+        for a in alerts:
+            print(f"   → {a}")
+        send_email(alerts, vix_value, fg_value, fg_desc, qqq_price)
+    else:
+        print("\n✅ All values within normal range. No alert sent.")
+        print(f"   VIX: {VIX_LOW} ≤ {vix_value} ≤ {VIX_HIGH}")
+        print(f"   F&G: {FG_LOW} ≤ {fg_value} ≤ {FG_HIGH}")
+        print(f"   QQQ: {qqq_price} ≤ {QQQ_HIGH}")
 
 
 def main():
     print("🚀 Market Alert Monitor Started!")
-    print(f"   Checking every {CHECK_INTERVAL_SECONDS // 3600} hour(s)")
-    print(f"   Will run until market close (4:00 PM ET)\n")
 
-    # Always run at least once (for manual testing)
-    run_check()
+    if not is_weekday_market_hours():
+        now_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M:%S %p ET")
+        print(f"ℹ️ Outside regular market hours at {now_et}. Exiting.")
+        return
 
-    # Then loop until market closes
-    while is_market_open():
-        print(f"\n⏳ Sleeping for {CHECK_INTERVAL_SECONDS // 60} minutes...")
-        time.sleep(CHECK_INTERVAL_SECONDS)
+    try:
+        run_check()
+    except Exception as e:
+        print(f"\n❌ Error during check: {e}")
+        raise
 
-        if is_market_open():
-            run_check()
-        else:
-            break
-
-    print("\n👋 Market Alert Monitor finished for today.")
+    print("\n👋 Market Alert Monitor finished.")
 
 
 if __name__ == "__main__":
