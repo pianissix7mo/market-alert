@@ -18,12 +18,10 @@ SENDER_APP_PASSWORD = os.environ.get("ALERT_APP_PASSWORD")
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
-# Thresholds
-VIX_LOW = 16
+# Alert Thresholds
+SPMO_LOW = 125
+FG_LOW = 6
 VIX_HIGH = 30
-FG_LOW = 30
-FG_HIGH = 70
-QQQ_HIGH = 750
 # ──────────────────────────────────────────────────────────────────
 
 
@@ -47,56 +45,56 @@ def get_fear_and_greed():
     return round(float(fg.value), 2), fg.description
 
 
-def get_qqq_price():
-    qqq = yf.Ticker("QQQ")
-    data = qqq.history(period="1d")
+def get_spmo_price():
+    spmo = yf.Ticker("SPMO")
+    data = spmo.history(period="1d")
     if data.empty:
-        raise ValueError("Could not fetch QQQ data.")
+        raise ValueError("Could not fetch SPMO data.")
     return round(float(data["Close"].iloc[-1]), 2)
 
 
-def check_conditions(vix_value, fg_value, qqq_price):
+def check_conditions(vix_value, fg_value, spmo_price):
     alerts = []
 
-    if vix_value < VIX_LOW:
-        alerts.append(f"🟢 VIX is BELOW {VIX_LOW}: currently {vix_value}")
-    if vix_value > VIX_HIGH:
-        alerts.append(f"🔴 VIX is ABOVE {VIX_HIGH}: currently {vix_value}")
+    if spmo_price <= SPMO_LOW:
+        alerts.append(f"🔴 SPMO is AT OR BELOW ${SPMO_LOW}: currently ${spmo_price}")
 
-    if fg_value < FG_LOW:
+    if fg_value <= FG_LOW:
         alerts.append(
-            f"🔴 CNN Fear & Greed Index is BELOW {FG_LOW} (Extreme Fear): currently {fg_value}"
-        )
-    if fg_value > FG_HIGH:
-        alerts.append(
-            f"🟢 CNN Fear & Greed Index is ABOVE {FG_HIGH} (Extreme Greed): currently {fg_value}"
+            f"🔴 CNN Fear & Greed Index is AT OR BELOW {FG_LOW}: currently {fg_value}"
         )
 
-    if qqq_price > QQQ_HIGH:
-        alerts.append(f"🚀 QQQ is ABOVE ${QQQ_HIGH}: currently ${qqq_price}")
+    if vix_value >= VIX_HIGH:
+        alerts.append(f"🔴 VIX is AT OR ABOVE {VIX_HIGH}: currently {vix_value}")
 
     return alerts
 
 
-def send_email(alerts, vix_value, fg_value, fg_desc, qqq_price):
-    now_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M:%S %p ET")
+def send_email(alerts, vix_value, fg_value, fg_desc, spmo_price):
+    now_et = datetime.now(ZoneInfo("America/New_York")).strftime(
+        "%Y-%m-%d %I:%M:%S %p ET"
+    )
     subject = f"⚠️ Market Alert Triggered — {now_et}"
 
     body = f"""
     <html>
     <body>
     <h2>⚠️ Market Alert — {now_et}</h2>
+
     <h3>Triggered Conditions:</h3>
     <ul>
         {"".join(f"<li><b>{a}</b></li>" for a in alerts)}
     </ul>
+
     <hr>
+
     <h3>Current Market Snapshot:</h3>
     <table border="1" cellpadding="8" cellspacing="0">
         <tr><td><b>CBOE VIX</b></td><td>{vix_value}</td></tr>
         <tr><td><b>CNN Fear & Greed</b></td><td>{fg_value} ({fg_desc})</td></tr>
-        <tr><td><b>QQQ Price</b></td><td>${qqq_price}</td></tr>
+        <tr><td><b>SPMO Price</b></td><td>${spmo_price}</td></tr>
     </table>
+
     <br>
     <p><i>This is an automated alert from your Market Alert Script.</i></p>
     </body>
@@ -135,7 +133,10 @@ def is_weekday_market_hours():
 
 
 def run_check():
-    now_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M:%S %p ET")
+    now_et = datetime.now(ZoneInfo("America/New_York")).strftime(
+        "%Y-%m-%d %I:%M:%S %p ET"
+    )
+
     print(f"\n{'=' * 50}")
     print(f"  Market Alert Check — {now_et}")
     print(f"{'=' * 50}")
@@ -150,29 +151,33 @@ def run_check():
     fg_value, fg_desc = get_fear_and_greed()
     print(f"   Fear & Greed = {fg_value} ({fg_desc})")
 
-    print("📡 Fetching QQQ price...")
-    qqq_price = get_qqq_price()
-    print(f"   QQQ = ${qqq_price}")
+    print("📡 Fetching SPMO price...")
+    spmo_price = get_spmo_price()
+    print(f"   SPMO = ${spmo_price}")
 
-    alerts = check_conditions(vix_value, fg_value, qqq_price)
+    alerts = check_conditions(vix_value, fg_value, spmo_price)
 
     if alerts:
         print(f"\n🚨 {len(alerts)} alert(s) triggered!")
         for a in alerts:
             print(f"   → {a}")
-        send_email(alerts, vix_value, fg_value, fg_desc, qqq_price)
+
+        send_email(alerts, vix_value, fg_value, fg_desc, spmo_price)
+
     else:
-        print("\n✅ All values within normal range. No alert sent.")
-        print(f"   VIX: {VIX_LOW} ≤ {vix_value} ≤ {VIX_HIGH}")
-        print(f"   F&G: {FG_LOW} ≤ {fg_value} ≤ {FG_HIGH}")
-        print(f"   QQQ: {qqq_price} ≤ {QQQ_HIGH}")
+        print("\n✅ No alert triggered.")
+        print(f"   SPMO: ${spmo_price} > ${SPMO_LOW}")
+        print(f"   Fear & Greed: {fg_value} > {FG_LOW}")
+        print(f"   VIX: {vix_value} < {VIX_HIGH}")
 
 
 def main():
     print("🚀 Market Alert Monitor Started!")
 
     if not is_weekday_market_hours():
-        now_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M:%S %p ET")
+        now_et = datetime.now(ZoneInfo("America/New_York")).strftime(
+            "%Y-%m-%d %I:%M:%S %p ET"
+        )
         print(f"ℹ️ Outside regular market hours at {now_et}. Exiting.")
         return
 
